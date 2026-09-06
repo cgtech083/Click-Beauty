@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sua Beleza - Agendamentos</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root { --primary: #d63384; --secondary: #6f42c1; --light: #f8f9fa; --dark: #212529; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f4f6f9; color: var(--dark); }
+        header { background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; padding: 15px; text-align: center; }
+        .container { max-width: 900px; margin: 20px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .hidden { display: none !important; }
+        .btn { background-color: var(--primary); color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; margin: 5px 0; width: 100%; font-size: 16px; }
+        .btn:hover { opacity: 0.9; }
+        .btn-secondary { background-color: #6c757d; }
+        .btn-danger { background-color: #dc3545; }
+        .btn-success { background-color: #198754; }
+        input, select { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-top: 15px; }
+        .card { border: 1px solid #e0e0e0; padding: 15px; border-radius: 8px; background: #fff; }
+        .metrics-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; text-align: center; }
+        .metric-card { background: var(--light); padding: 15px; border-radius: 8px; border-left: 4px solid var(--primary); }
+        .slot-btn { padding: 8px; margin: 4px; border: 1px solid var(--primary); background: white; cursor: pointer; border-radius: 4px; }
+        .slot-btn.active { background: var(--primary); color: white; }
+        .slot-btn.disabled { background: #e0e0e0; border-color: #ccc; cursor: not-allowed; text-decoration: line-through; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Sua Beleza</h1>
+    <p>Agendamentos Online</p>
+</header>
+
+<div class="container">
+    <div id="view-landing">
+        <h3>Como deseja prosseguir?</h3>
+        <button class="btn" onclick="showView('view-client-categories')">Sou Cliente</button>
+        <button class="btn btn-secondary" onclick="showView('view-pro-auth')">Área do Profissional</button>
+    </div>
+
+    <div id="view-pro-auth" class="hidden">
+        <h2>Acesso Profissional</h2>
+        <div id="auth-login">
+            <input type="tel" id="login-phone" placeholder="Telefone (WhatsApp)">
+            <input type="password" id="login-pass" placeholder="Senha">
+            <button class="btn" onclick="loginPro()">Entrar</button>
+            <button class="btn btn-secondary" onclick="toggleAuthMode('recovery')">Esqueci a Senha</button>
+            <button class="btn btn-secondary" onclick="toggleAuthMode('register')">Novo Cadastro</button>
+        </div>
+
+        <div id="auth-register" class="hidden">
+            <h3>Novo Cadastro Profissional</h3>
+            <input type="text" id="reg-name" placeholder="Nome Completo">
+            <input type="tel" id="reg-phone" placeholder="Telefone/WhatsApp (Único)">
+            <input type="password" id="reg-pass" placeholder="Senha">
+            <input type="text" id="reg-sec-q" placeholder="Pergunta de Segurança (ex: Nome do 1º pet?)">
+            <input type="password" id="reg-sec-a" placeholder="Resposta de Segurança">
+            <button class="btn btn-success" onclick="registerPro()">Cadastrar</button>
+            <button class="btn btn-secondary" onclick="toggleAuthMode('login')">Voltar ao Login</button>
+        </div>
+
+        <div id="auth-recovery" class="hidden">
+            <h3>Recuperar Senha</h3>
+            <input type="tel" id="rec-phone" placeholder="Informe seu Telefone">
+            <button class="btn" onclick="fetchSecQuestion()">Buscar Pergunta</button>
+            <div id="rec-step-2" class="hidden">
+                <p id="rec-question-text" style="font-weight:bold;"></p>
+                <input type="text" id="rec-answer" placeholder="Sua Resposta">
+                <input type="password" id="rec-new-pass" placeholder="Nova Senha">
+                <button class="btn btn-success" onclick="resetPassword()">Redefinir Senha</button>
+            </div>
+            <button class="btn btn-secondary" onclick="toggleAuthMode('login')">Voltar ao Login</button>
+        </div>
+        <button class="btn btn-secondary" style="margin-top:15px;" onclick="showView('view-landing')">Voltar</button>
+    </div>
+
+    <div id="view-pro-dashboard" class="hidden">
+        <h2>Painel de Controle</h2>
+        <p>Link de Compartilhamento: <strong id="pro-share-link"></strong></p>
+        
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <h4>Hoje</h4>
+                <p id="m-day-val">R$ 0,00</p>
+                <small id="m-day-count">0 atendi.</small>
+            </div>
+            <div class="metric-card">
+                <h4>Mês</h4>
+                <p id="m-month-val">R$ 0,00</p>
+                <small id="m-month-count">0 atendi.</small>
+            </div>
+            <div class="metric-card" style="border-color: #dc3545;">
+                <h4>Despesas (Mês)</h4>
+                <p id="m-exp-val">R$ 0,00</p>
+                <small id="m-net-val">Líquido: R$ 0,00</small>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Gerenciar Serviços</h3>
+            <input type="text" id="srv-name" placeholder="Nome do Serviço">
+            <select id="srv-cat">
+                <option value="Cabeleireiro">Cabeleireiro</option>
+                <option value="Manicure">Manicure</option>
+                <option value="Design de Sobrancelhas">Design de Sobrancelhas</option>
+            </select>
+            <input type="number" id="srv-price" placeholder="Valor (R$)" step="0.01">
+            <button class="btn btn-success" onclick="addOrUpdateService()">Adicionar/Atualizar Serviço</button>
+            <div id="pro-services-list" class="grid"></div>
+        </div>
+
+        <div class="card" style="margin-top: 15px;">
+            <h3>Cadastrar Despesa</h3>
+            <input type="text" id="exp-desc" placeholder="Descrição da Despesa">
+            <input type="number" id="exp-amount" placeholder="Valor (R$)" step="0.01">
+            <button class="btn btn-danger" onclick="addExpense()">Registrar Despesa</button>
+        </div>
+
+        <div class="card" style="margin-top: 15px;">
+            <h3>Configurar Grade de Horários</h3>
+            <p>Clique no horário para Ativar/Desativar para agendamentos:</p>
+            <div id="pro-hours-grid"></div>
+        </div>
+
+        <div class="card" style="margin-top: 15px;">
+            <h3>Agendamentos Recebidos</h3>
+            <div id="pro-appointments-list"></div>
+        </div>
+
+        <button class="btn btn-secondary" style="margin-top:20px;" onclick="logoutPro()">Sair do Painel</button>
+    </div>
+
+    <div id="view-client-categories" class="hidden">
+        <h2>Selecione o Serviço Desejado</h2>
+        <div class="grid">
+            <div class="card" onclick="selectCategory('Cabeleireiro')">
+                <h3>Cabeleireiro</h3>
+                <p>Cortes, coloração e tratamentos.</p>
+            </div>
+            <div class="card" onclick="selectCategory('Manicure')">
+                <h3>Manicure</h3>
+                <p>Unhas, esmaltação e cuidados.</p>
+            </div>
+            <div class="card" onclick="selectCategory('Design de Sobrancelhas')">
+                <h3>Design de Sobrancelhas</h3>
+                <p>Modelagem, rena e micropigmentação.</p>
+            </div>
+        </div>
+        <button class="btn btn-secondary" style="margin-top:15px;" onclick="showView('view-landing')">Voltar</button>
+    </div>
+
+    <div id="view-client-booking" class="hidden">
+        <h2 id="client-cat-title">Serviços Disponíveis</h2>
+        <div id="client-services-list" class="grid"></div>
+
+        <div id="booking-form" class="card hidden" style="margin-top: 20px;">
+            <h3>Finalizar Agendamento</h3>
+            <p id="selected-service-info" style="font-weight:bold; color:var(--primary);"></p>
+            <input type="text" id="cli-name" placeholder="Seu Nome Completo">
+            <input type="tel" id="cli-phone" placeholder="Seu WhatsApp">
+            <input type="date" id="cli-date" onchange="loadAvailableSlots()">
+            
+            <p>Escolha o Horário:</p>
+            <div id="cli-slots-grid"></div>
+
+            <button class="btn btn-success" style="margin-top:15px;" onclick="confirmBooking()">Confirmar Agendamento</button>
+        </div>
+        <button class="btn btn-secondary" style="margin-top:15px;" onclick="showView('view-client-categories')">Voltar</button>
+    </div>
+</div>
+
+<script>
+    // CONFIGURAÇÃO SUPABASE
+    // Substitua pelas credenciais do seu projeto Supabase
+    const SUPABASE_URL = "https://seu-projeto.supabase.co";
+    const SUPABASE_KEY = "sua-anon-key";
+    const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // ESTADO DA APLICAÇÃO
+    let currentPro = null;
+    let selectedCategory = '';
+    let selectedService = null;
+    let selectedSlot = '';
+    const baseHours = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
+
+    // NAVEGAÇÃO DE TELAS
+    function showView(viewId) {
+        const views = ['view-landing', 'view-pro-auth', 'view-pro-dashboard', 'view-client-categories', 'view-client-booking'];
+        views.forEach(v => document.getElementById(v).classList.add('hidden'));
+        document.getElementById(viewId).classList.remove('hidden');
+    }
+
+    function toggleAuthMode(mode) {
+        document.getElementById('auth-login').classList.add('hidden');
+        document.getElementById('auth-register').classList.add('hidden');
+        document.getElementById('auth-recovery').classList.add('hidden');
+        document.getElementById(`auth-${mode}`).classList.remove('hidden');
+    }
+
+    // AUTENTICAÇÃO E RECUPERAÇÃO DO PROFISSIONAL
+    async function registerPro() {
+        const name = document.getElementById('reg-name').value;
+        const phone = document.getElementById('reg-phone').value;
+        const password = document.getElementById('reg-pass').value;
+        const secQuestion = document.getElementById('reg-sec-q').value;
+        const secAnswer = document.getElementById('reg-sec-a').value.toLowerCase().trim();
+
+        if(!name || !phone || !password || !secQuestion || !secAnswer) return alert('Preencha todos os campos!');
+
+        // Verifica duplicidade de telefone
+        const { data: existing } = await db.from('professionals').select('id').eq('phone', phone).single();
+        if(existing) return alert('Este número de telefone já está cadastrado!');
+
+        // Cria a grade inicial de horários ativos
+        const initialSchedule = {};
+        baseHours.forEach(h => initialSchedule[h] = true);
+
+        const { data, error } = await db.from('professionals').insert([{
+            name, phone, password, sec_question: secQuestion, sec_answer: secAnswer, schedule_config: initialSchedule
+        }]).select();
+
+        if(error) return alert('Erro ao cadastrar: ' + error.message);
+        
+        alert('Cadastro realizado com sucesso!');
+        currentPro = data[0];
+        initProDashboard();
+    }
+
+    async function loginPro() {
+        const phone = document.getElementById('login-phone').value;
+        const pass = document.getElementById('login-pass').value;
+
+        const { data, error } = await db.from('professionals').select('*').eq('phone', phone).eq('password', pass).single();
+
+        if(error || !data) return alert('Telefone ou senha inválidos!');
+        currentPro = data;
+        initProDashboard();
+    }
+
+    async function fetchSecQuestion() {
+        const phone = document.getElementById('rec-phone').value;
+        const { data, error } = await db.from('professionals').select('sec_question').eq('phone', phone).single();
+        if(error || !data) return alert('Telefone não encontrado!');
+
+        document.getElementById('rec-question-text').innerText = data.sec_question;
+        document.getElementById('rec-step-2').classList.remove('hidden');
+    }
+
+    async function resetPassword() {
+        const phone = document.getElementById('rec-phone').value;
+        const answer = document.getElementById('rec-answer').value.toLowerCase().trim();
+        const newPass = document.getElementById('rec-new-pass').value;
+
+        const { data } = await db.from('professionals').select('*').eq('phone', phone).single();
+        if(data && data.sec_answer === answer) {
+            await db.from('professionals').update({ password: newPass }).eq('id', data.id);
+            alert('Senha redefinida com sucesso!');
+            toggleAuthMode('login');
+        } else {
+            alert('Resposta de segurança incorreta!');
+        }
+    }
+
+    function logoutPro() {
+        currentPro = null;
+        showView('view-landing');
+    }
+
+    // PAINEL PROFISSIONAL
+    function initProDashboard() {
+        showView('view-pro-dashboard');
+        const shareUrl = `${window.location.origin}${window.location.pathname}?pro=${currentPro.id}`;
+        document.getElementById('pro-share-link').innerText = shareUrl;
+        
+        loadProServices();
+        loadProScheduleConfig();
+        loadProMetricsAndAppointments();
+        
+        // Assinatura em tempo real para novos agendamentos
+        db.channel('realtime-appointments')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => {
+              loadProMetricsAndAppointments();
+          }).subscribe();
+    }
+
+    async function loadProServices() {
+        const { data } = await db.from('services').select('*').eq('pro_id', currentPro.id);
+        const listContainer = document.getElementById('pro-services-list');
+        listContainer.innerHTML = '';
+        
+        (data || []).forEach(srv => {
+            listContainer.innerHTML += `
+                <div class="card">
+                    <h4>${srv.name}</h4>
+                    <p>Cat: ${srv.category}</p>
+                    <p>R$ ${parseFloat(srv.price).toFixed(2)}</p>
+                    <button class="btn btn-danger" onclick="deleteService('${srv.id}')">Excluir</button>
+                </div>
+            `;
+        });
+    }
+
+    async function addOrUpdateService() {
+        const name = document.getElementById('srv-name').value;
+        const category = document.getElementById('srv-cat').value;
+        const price = parseFloat(document.getElementById('srv-price').value);
+
+        if(!name || !price) return alert('Preencha os dados do serviço');
+
+        await db.from('services').insert([{ pro_id: currentPro.id, name, category, price }]);
+        document.getElementById('srv-name').value = '';
+        document.getElementById('srv-price').value = '';
+        loadProServices();
+    }
+
+    async function deleteService(id) {
+        await db.from('services').delete().eq('id', id);
+        loadProServices();
+    }
+
+    function loadProScheduleConfig() {
+        const container = document.getElementById('pro-hours-grid');
+        container.innerHTML = '';
+        const config = currentPro.schedule_config || {};
+
+        baseHours.forEach(hour => {
+            const active = config[hour] !== false;
+            const btn = document.createElement('button');
+            btn.className = `slot-btn ${active ? 'active' : 'disabled'}`;
+            btn.innerText = `${hour} (${active ? 'Ativo' : 'Inativo'})`;
+            btn.onclick = () => toggleHourSlot(hour, !active);
+            container.appendChild(btn);
+        });
+    }
+
+    async function toggleHourSlot(hour, status) {
+        currentPro.schedule_config[hour] = status;
+        await db.from('professionals').update({ schedule_config: currentPro.schedule_config }).eq('id', currentPro.id);
+        loadProScheduleConfig();
+    }
+
+    async function addExpense() {
+        const desc = document.getElementById('exp-desc').value;
+        const amount = parseFloat(document.getElementById('exp-amount').value);
+        if(!desc || !amount) return alert('Informe os dados da despesa');
+
+        await db.from('expenses').insert([{ pro_id: currentPro.id, description: desc, amount, date: new Date().toISOString() }]);
+        document.getElementById('exp-desc').value = '';
+        document.getElementById('exp-amount').value = '';
+        loadProMetricsAndAppointments();
+    }
+
+    async function loadProMetricsAndAppointments() {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+
+        // Buscar Agendamentos
+        const { data: appointments } = await db.from('appointments').select('*').eq('pro_id', currentPro.id).order('date_time', { ascending: true });
+        // Buscar Despesas
+        const { data: expenses } = await db.from('expenses').select('*').eq('pro_id', currentPro.id);
+
+        let dayVal = 0, dayCount = 0;
+        let monthVal = 0, monthCount = 0;
+        let monthExp = 0;
+
+        const listContainer = document.getElementById('pro-appointments-list');
+        listContainer.innerHTML = '';
+
+        (appointments || []).forEach(app => {
+            const appDate = new Date(app.date_time);
+            const isToday = app.date_time.startsWith(todayStr);
+            const isThisMonth = appDate.getMonth() === currentMonth && appDate.getFullYear() === currentYear;
+
+            if(isToday) { dayVal += parseFloat(app.price); dayCount++; }
+            if(isThisMonth) { monthVal += parseFloat(app.price); monthCount++; }
+
+            listContainer.innerHTML += `
+                <div class="card" style="margin-bottom:10px;">
+                    <p><strong>Cliente:</strong> ${app.client_name} (${app.client_phone})</p>
+                    <p><strong>Serviço:</strong> ${app.service_name} - R$ ${parseFloat(app.price).toFixed(2)}</p>
+                    <p><strong>Data/Hora do Serviço:</strong> ${new Date(app.date_time).toLocaleString('pt-BR')}</p>
+                    <small>Agendado em: ${new Date(app.created_at).toLocaleString('pt-BR')}</small>
+                </div>
+            `;
+        });
+
+        (expenses || []).forEach(exp => {
+            const expDate = new Date(exp.date);
+            if(expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear) {
+                monthExp += parseFloat(exp.amount);
+            }
+        });
+
+        document.getElementById('m-day-val').innerText = `R$ ${dayVal.toFixed(2)}`;
+        document.getElementById('m-day-count').innerText = `${dayCount} atendimentos`;
+        document.getElementById('m-month-val').innerText = `R$ ${monthVal.toFixed(2)}`;
+        document.getElementById('m-month-count').innerText = `${monthCount} atendimentos`;
+        document.getElementById('m-exp-val').innerText = `R$ ${monthExp.toFixed(2)}`;
+        document.getElementById('m-net-val').innerText = `Líquido: R$ ${(monthVal - monthExp).toFixed(2)}`;
+    }
+
+    // ÁREA DO CLIENTE
+    async function selectCategory(cat) {
+        selectedCategory = cat;
+        document.getElementById('client-cat-title').innerText = `Serviços de ${cat}`;
+        showView('view-client-booking');
+        
+        // Verifica se há filtro de profissional no parâmetro da URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const proFilter = urlParams.get('pro');
+
+        let query = db.from('services').select('*, professionals(name, schedule_config)').eq('category', cat);
+        if(proFilter) query = query.eq('pro_id', proFilter);
+
+        const { data: services } = await query;
+        const container = document.getElementById('client-services-list');
+        container.innerHTML = '';
+
+        (services || []).forEach(srv => {
+            container.innerHTML += `
+                <div class="card">
+                    <h3>${srv.name}</h3>
+                    <p>Profissional: ${srv.professionals.name}</p>
+                    <p><strong>R$ ${parseFloat(srv.price).toFixed(2)}</strong></p>
+                    <button class="btn" onclick="startBooking('${srv.id}', '${srv.name}', ${srv.price}, '${srv.pro_id}')">Agendar</button>
+                </div>
+            `;
+        });
+
+        // Ouvinte em tempo real para refletir alterações de preço/serviço instantaneamente
+        db.channel('realtime-services')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'services' }, () => {
+              selectCategory(selectedCategory);
+          }).subscribe();
+    }
+
+    function startBooking(id, name, price, proId) {
+        selectedService = { id, name, price, proId };
+        document.getElementById('selected-service-info').innerText = `${name} - R$ ${parseFloat(price).toFixed(2)}`;
+        document.getElementById('booking-form').classList.remove('hidden');
+    }
+
+    async function loadAvailableSlots() {
+        const dateVal = document.getElementById('cli-date').value;
+        if(!dateVal) return;
+
+        // Buscar horários ocupados no banco de dados para o profissional nesta data
+        const { data: existingApps } = await db.from('appointments')
+            .select('date_time')
+            .eq('pro_id', selectedService.proId)
+            .gte('date_time', `${dateVal}T00:00:00`)
+            .lte('date_time', `${dateVal}T23:59:59`);
+
+        const bookedHours = (existingApps || []).map(a => a.date_time.split('T')[1].substring(0, 5));
+
+        // Buscar configuração do profissional
+        const { data: pro } = await db.from('professionals').select('schedule_config').eq('id', selectedService.proId).single();
+        const config = pro.schedule_config || {};
+
+        const slotsContainer = document.getElementById('cli-slots-grid');
+        slotsContainer.innerHTML = '';
+
+        baseHours.forEach(hour => {
+            const isConfigured = config[hour] !== false;
+            const isBooked = bookedHours.includes(hour);
+            
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = `slot-btn ${(!isConfigured || isBooked) ? 'disabled' : ''}`;
+            btn.innerText = hour;
+            
+            if(isConfigured && !isBooked) {
+                btn.onclick = () => {
+                    document.querySelectorAll('#cli-slots-grid .slot-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    selectedSlot = hour;
+                };
+            }
+            slotsContainer.appendChild(btn);
+        });
+    }
+
+    async function confirmBooking() {
+        const name = document.getElementById('cli-name').value;
+        const phone = document.getElementById('cli-phone').value;
+        const date = document.getElementById('cli-date').value;
+
+        if(!name || !phone || !date || !selectedSlot) return alert('Preencha todos os campos e selecione o horário!');
+
+        const dateTimeISO = `${date}T${selectedSlot}:00`;
+
+        const { error } = await db.from('appointments').insert([{
+            pro_id: selectedService.proId,
+            service_name: selectedService.name,
+            price: selectedService.price,
+            client_name: name,
+            client_phone: phone,
+            date_time: dateTimeISO,
+            created_at: new Date().toISOString()
+        }]);
+
+        if(error) return alert('Erro ao agendar: ' + error.message);
+
+        alert('Agendamento realizado com sucesso!');
+        document.getElementById('booking-form').classList.add('hidden');
+        showView('view-client-categories');
+    }
+</script>
+</body>
+</html>
